@@ -24,4 +24,4 @@ for a in emotions_list:
 
 vector_dataframe = pd.DataFrame(data=np.array(list_of_lists), columns=['Emotion', 'Vector'])
 print(vector_dataframe)
-vector_dataframe.to_json("./vector_dataframe.json", orient='columns')
+vector_dataframe.to_json("./LBP_vector_dataframe.json", orient='columns')
