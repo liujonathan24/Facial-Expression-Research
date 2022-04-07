@@ -18,7 +18,6 @@ for a in range(920): # Number of photos
     else:
         print('whut????')
 
-
 #print(len(overall_list[0][1]))
 
 # C is a small constant
@@ -32,7 +31,6 @@ for b in range(920):
         r += (a-avg)**2
         avg += a/91
     #print(avg)
-        
     new = []
     for a in abcd:
         new.append(100 * (a-avg)/(r+c))
