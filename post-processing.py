@@ -25,11 +25,10 @@ c = 1e-5
 
 for b in range(920):
     abcd = overall_list[b][1] # 91 length: 59 + 32
-    avg = 0
+    avg = sum(abcd)/len(abcd)
     r = 0
     for a in abcd:
         r += (a-avg)**2
-        avg += a/91
     #print(avg)
     new = []
     for a in abcd:
@@ -37,7 +36,7 @@ for b in range(920):
     overall_list[b][1] = new
 
 vector_dataframe = pd.DataFrame(data=np.array(overall_list), columns=['Emotion', 'Final_Vector'])
-vector_dataframe.to_json("./Final_Vectors.json", orient='columns')
+vector_dataframe.to_json("./Final_Vectors_corrected:(.json", orient='columns')
 
 
 
