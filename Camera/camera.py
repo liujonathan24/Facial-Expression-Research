@@ -5,6 +5,8 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.feature import local_binary_pattern
+import torch
+import torch.nn as nn
 import scipy
 import pandas as pd
 import random
@@ -195,8 +197,12 @@ def processed_feature_list(list): # list = [lbp, orb]
     return [100 * (a - avg) / (r + c) for a in vector]
 
 def init_model():
-    model_abs_path = "../Polygence-Jupyter/model.dat"
-    model = cv2.ml.SVM_load(model_abs_path)
+    #model_abs_path = "../Polygence-Jupyter/model.dat"
+    #model = cv2.ml.SVM_load(model_abs_path)
+    model = nn.Module()
+    model.load("Polygence/Mediapipe_experiments/model-v1.pt")
+    model.eval()
+
     return model
 
 model = init_model()
@@ -227,7 +233,7 @@ while rval:
     elif key == ord(" "): # Take photo on space
         vector = crop_and_vector(frame, "full")
         processed_vector = processed_feature_list(vector)
-        pred = int(model.predict(np.matrix(processed_vector, dtype=np.float32))[1])
+        pred = int(model(np.matrix(processed_vector, dtype=np.float32)))
         print("Prediction: " + str(number_to_emotion_dict[pred]))
 
 vc.release()

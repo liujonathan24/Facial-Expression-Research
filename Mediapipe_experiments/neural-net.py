@@ -1,95 +1,109 @@
+# Version 1: 31.72% accuracy (exactly 1 epoch)
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
-from sklearn import datasets
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 import pandas as pd
+from Points import Points
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from itertools import chain
 
 emotion_dict = {"anger": 0, "contempt": 1, "disgust": 2, "fear": 3, "happiness": 4, "neutral": 5, "sadness": 6,"sad": 6,
             "surprise": 7}
 
-def read_data(parts):
-    JAFFE = pd.read_json(parts + '-JAFFE-vectors.json')
-    CK = pd.read_json(parts + '-CK+-vectors.json')
+def read_data(path, label_points):
+    print(len(label_points))
+    landmarks = pd.read_json(path)
+    emotions = np.asarray([emotion_dict[y] for y in landmarks.iloc[0].astype(object)], dtype=np.float32)
+    print(emotions)
+    columns = landmarks.shape[1]
+    #points = np.zeros((1133, len(label_points) * 2), dtype=np.float32)
+    points = []
+    for photo in range(columns):
+        #temp_list = [landmarks[photo].iloc[point+1][0:2] for point in label_points]
+        #print(temp_list)
+        for point in label_points:
+            coords = landmarks[photo].iloc[point+1][0:2]
+            points.extend(coords)
 
-    JAFFE_EMO = np.asarray([emotion_dict[y] for y in JAFFE['Emotion'].astype(object)], dtype=np.float32)
-    JAFFE_VEC = np.array([np.array(x, dtype=np.float32) for x in JAFFE['Final_Vector']])
-    CK_EMO = np.asarray([emotion_dict[y] for y in CK['Emotion'].astype(object)], dtype=np.float32)
-    CK_VEC = np.array([np.array(x, dtype=np.float32) for x in CK['Final_Vector']])
-    print(len(JAFFE_EMO))
-    print(len(CK_EMO))
-    return np.concatenate((JAFFE_EMO, CK_EMO)), np.concatenate((JAFFE_VEC, CK_VEC))
-    #return [[a, b] for (a, b) in zip(np.concatenate((JAFFE_EMO, CK_EMO)), np.concatenate((JAFFE_VEC, CK_VEC)))]
+    points = np.array(points, dtype=np.float32).reshape(1133, len(label_points*2))
+
+    print(f"shape at the end: {points.shape}")
+    return emotions, points
+    #return [[a, b] for (a, b) in zip(np.concatenate((JAFFE_EMO, CK_EMO)), np.concatenate((JAFFE_VEC, CK_VEC)))] #
 
 
+min_wanted_points = Points.right_eye_middle.value + Points.left_eye_middle.value + Points.nose.value + Points.mouth_inner.value
+max_wanted_points = min_wanted_points + Points.right_eye_inner.value + Points.right_eye_outer.value + \
+    Points.left_eye_inner.value + Points.left_eye_outer.value
 
-full_y, full_x = read_data("../Polygence-Jupyter/full")
-
-#print(full_y)
-#full_y = [emotion_dict[y] for y in full_y]
-#print(full_y)
-#print(full_x.shape)
-n_samples, n_features = full_x.shape, 91
+full_y, full_x = read_data("./photo_landmark_list.json", min_wanted_points)
 
 X_train, X_test, y_train, y_test = train_test_split(full_x, full_y, test_size=0.2, random_state=1234)
 
-# scale
-#sc = StandardScaler()
-#X_train = sc.fit_transform(X_train)
-#X_test = sc.transform(X_test)
 
 X_train = torch.from_numpy(X_train)
-X_test = torch.from_numpy(X_test.astype(np.float32))
-y_train = torch.from_numpy(y_train.astype(np.float32))
-y_test = torch.from_numpy(y_test.astype(np.float32))
+print(f"X_train type: {X_train.shape}")
+X_test = torch.from_numpy(X_test)
+y_train = torch.from_numpy(y_train)
+y_test = torch.from_numpy(y_test)
 
 y_train = y_train.view(y_train.shape[0], 1)
 y_test = y_test.view(y_test.shape[0], 1)
 
-
-print(X_train.shape)
-print(X_test.shape)
+#print(X_train[0])
+#print(X_test[0])
 print(y_train.shape)
 print(y_test.shape)
+print(f"y_test[0] = {y_test[0]}")
 
 # 1) Model
 # Linear model f = wx + b , sigmoid at the end
 class Model(nn.Module):
     def __init__(self, n_input_features):
         super(Model, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(91, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 1),
-        )
-    def forward(self, x):
-        return self.model(x)
+        self.fc1 = nn.Linear(140, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 8)
 
-model = Model(n_features)
+    def forward(self, x):
+        x = x.view(-1, 140)
+        x = F.relu(self.fc1(x), inplace=True)
+        x = F.relu(self.fc2(x), inplace=True)
+        x = self.fc3(x)
+        return x
+
+model = Model(140)
 
 # 2) Loss and optimizer
-num_epochs = 100000
-learning_rate = 0.01
-criterion = nn.BCELoss()
+num_epochs = 20
+learning_rate = 0.001
+criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
 # 3) Training loop
 for epoch in range(num_epochs):
-    # Forward pass and loss
-    y_pred = model(X_train)
-    loss = criterion(y_pred, y_train)
+    for i, (image, label) in enumerate(zip(X_train, y_train)):
+        # Forward pass and loss
+        y_pred = model(image)
+        #print(f"y_pred shape: {y_pred.view(-1).shape}")
+        #print(f"y_pred type: {type(y_pred.view(-1))}")
+        #print(f"y_pred = {y_pred}")
+        new_label = np.zeros(8)
+        new_label[int(label)] = 1
+        #print(f"label shape: {torch.from_numpy(new_label).shape}")
+        #print(f"label type: {type(torch.from_numpy(new_label))}")
+        loss = criterion(y_pred.view(8, 1), torch.from_numpy(new_label).float().view(8,1))
 
-    # Backward pass and update
-    loss.backward()
-    optimizer.step()
+        optimizer.zero_grad()
 
-    # zero grad before new step
-    optimizer.zero_grad()
+        # Backward pass and update
+        loss.backward()
+        optimizer.step()
 
-    if (epoch+1) % 1000 == 0:
+
+    if (epoch+1) % 10 == 0:
         print(f'epoch: {epoch+1}, loss = {loss.item():.4f}')
 
 
