@@ -43,14 +43,18 @@ for pic_file in glob.glob(os.path.join("../Datasets/JAFFE", "*tiff")):
     photo_counter += 1
 
 # FER-2013
-for set in ["test", "train"]:
+FER_emo_dict = {0:"anger", 1:"disgust", 2:"fear", 3:"happiness", 4:"neutral", 5:"sadness", 6:"surprise"}
+for set in ["test/", "train/"]:
     root = "../Datasets/FER2013/" + set
-    for emotion in ["anger", "contempt", "disgust", "fear", "happiness", "neutral", "sadness", "surprise"]:
+    for index, emotion in enumerate(["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"]):
         emo_folder_path = root + emotion
         for pic_file in glob.glob(os.path.join(emo_folder_path, "*jpg")):
             list_paths.append(pic_file)
-            photo_landmark_dict[photo_counter] = [emotion]
+            photo_landmark_dict[photo_counter] = [FER_emo_dict[index]]
             photo_counter += 1
+print(photo_counter)
+
+skipped = 0
 
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 with mp_face_mesh.FaceMesh(
@@ -58,17 +62,20 @@ with mp_face_mesh.FaceMesh(
     max_num_faces=1,
     refine_landmarks=True,
     min_detection_confidence=0.5) as face_mesh:
-  for idx, file in enumerate(list_paths):
-    image = cv2.imread(file)
-    # MUST CROP PHOTO FIRST AND THEN STUFF.
-    shape = image.shape
-    shapes.append(shape)
-    # Convert the BGR image to RGB before processing.
-    results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    list = np.array([])
-    for count, mark in enumerate(results.multi_face_landmarks[0].landmark):
-        coords = [mark.x, mark.y, mark.z]
-        photo_landmark_dict[idx].append(coords)
+    for idx, file in enumerate(list_paths):
+        image = cv2.imread(file, 0)
+        # Convert the BGR image to RGB before processing.
+        results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+
+        if results.multi_face_landmarks is not None:
+            for count, mark in enumerate(results.multi_face_landmarks[0].landmark):
+                coords = [mark.x, mark.y, mark.z]
+                photo_landmark_dict[idx-skipped].append(coords)
+        else:
+            skipped += 1
+        # MUST CROP PHOTO FIRST AND THEN STUFF.
+        shape = image.shape
+        shapes.append(shape)
 
 #print(len(photo_landmark_dict[0]))
 # Edit percents to remove "offset" -> cropping image
